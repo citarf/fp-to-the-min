@@ -6,7 +6,11 @@ import java.io.IOException
 import zio._
 import zio.blocking._
 
-class Github(blocking: Blocking.Service) {
+trait Github {
+  def download(slug: String, file: String): ZIO[Any, IOException, String]
+}
+
+case class LiveGithub(blocking: Blocking.Service) extends Github {
   import blocking.effectBlocking
 
   def download(slug: String, file: String): ZIO[Any, IOException, String] =
@@ -17,26 +21,20 @@ class Github(blocking: Blocking.Service) {
   def open(slug: String, file: String): Managed[IOException, Source] = {
     val acquire = effectBlocking(unsafeOpen(slug, file)).refineToOrDie[IOException]
     val release = (source: Source) => effectBlocking(source.close()).orDie
-
     Managed.make(acquire)(release)
   }
 
   /**
-   * Downloads a file from Github.
-   */
-  def unsafeDownload(slug: String, file: String): String =
-    unsafeOpen(slug, file).getLines().mkString("\n")
-
-  /**
    * Opens a file from Github, so that it can be streamed or downloaded.
    */
-  def unsafeOpen(slug: String, file: String): Source =
+  private def unsafeOpen(slug: String, file: String): Source =
     Source.fromURL(Github.downloadUrl(slug, file))
 }
+
 object Github {
   val live: ZLayer[Blocking, Nothing, Has[Github]] =
-    ZLayer.fromFunction[Blocking, Github](env => new Github(env.get))
+    ZLayer.fromService[Blocking.Service, Github](LiveGithub.apply)
 
-  private def downloadUrl(slug: String, file: String): String =
+  def downloadUrl(slug: String, file: String): String =
     s"https://github.com/${slug}/raw/master/${file}"
 }
