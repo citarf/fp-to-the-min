@@ -21,6 +21,6 @@ object Main extends App {
       Console.live >+>
       StatsInterpreter.live
 
-    interpreter.build.use(_.get[StatsInterpreter].start)
+    ZIO.service[StatsInterpreter].flatMap(_.start).provideLayer(interpreter)
   }
 }
